@@ -83,6 +83,17 @@ def echo(*text: str):
     print(" ".join(text))
 
 
+@command(name="help", alias="?")
+def cmd_help(name: str):
+    """ Viser hjelp. """
+    cmd = get_command(name)
+
+    if cmd:
+        print(cmd.usage, cmd.description, sep=" : ")
+    else:
+        print("Kommando {} eksisterer ikke.".format(name))
+
+
 def main():
     """ Gjør hele skiten. """
     print("Velkommen.\n")
