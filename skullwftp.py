@@ -8,12 +8,12 @@ import inspect
 
 
 commands = []
-Command = namedtuple("Command", "name function usage description")
+Command = namedtuple("Command", "name function usage description alias")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
-def command(name=None):
+def command(name: str=None, alias: str=None):
     """ Legger til en command. Eksempel:
 
         @command()
@@ -31,10 +31,11 @@ def command(name=None):
             usage.append("<" + param.name + ">")
 
         commands.append(Command(
-            name=cmd_name,
+            name=cmd_name.lower(),
             function=func,
             usage=" ".join(usage),
-            description=inspect.cleandoc(func.__doc__)
+            description=inspect.cleandoc(func.__doc__),
+            alias=alias.lower().split() if alias else []
         ))
 
     return decorator
@@ -44,7 +45,7 @@ def get_command(name: str):
     """ Finn en command med gitt navn. """
     for cmd in commands:
         # Vi skjekker med lowercase for å være vennlig
-        if cmd.name.lower() == name.lower():
+        if cmd.name == name.lower() or name.lower() in cmd.alias:
             return cmd
 
     return None
@@ -69,14 +70,14 @@ def parse_command(text: str):
         return cmd.usage
 
 
-@command(name="exit")
+@command(name="exit", alias="quit stop")
 def cmd_exit():
     """ Avslutter skullWFTP. """
     global running
     running = False
 
 
-@command()
+@command(alias="say")
 def echo(*text: str):
     """ Skriver litt tekst. """
     print(" ".join(text))
