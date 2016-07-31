@@ -96,6 +96,9 @@ def cmd_help(name: str):
 
     if cmd:
         print(cmd.usage, cmd.description, sep=" : ")
+
+        if cmd.alias:
+            print("Alias:", ", ".join(cmd.alias))
     else:
         print("Kommando {} eksisterer ikke.".format(name))
 
@@ -201,7 +204,8 @@ def main():
             if logged_in:
                 ftp.quit()
         else:
-            parse_command(cmd)
+            if cmd:
+                parse_command(cmd)
 
 
 # Dette betyr bare at vi skal kjøre de gangene programmet faktisk starter
