@@ -5,16 +5,17 @@ import socket
 import ftplib
 import shlex
 from collections import namedtuple
+from functools import wraps
 import inspect
 
 
 commands = []
-Command = namedtuple("Command", "name function usage description alias")
+Command = namedtuple("Command", "name function usage description alias require_login")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
-def command(name: str=None, alias: str=None, usage=None):
+def command(name: str=None, alias: str=None, usage=None, require_login=False):
     """ Legger til en command. Eksempel:
 
         @command()
@@ -22,6 +23,13 @@ def command(name: str=None, alias: str=None, usage=None):
             print("going to", path)
     """
     def decorator(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            if require_login and not check_logged_in():
+                return
+
+            func(*args, **kwargs)
+
         cmd_name = name or func.__name__
 
         signature = inspect.signature(func)
@@ -33,11 +41,14 @@ def command(name: str=None, alias: str=None, usage=None):
 
         commands.append(Command(
             name=cmd_name.lower(),
-            function=func,
+            function=wrapped,
             usage=(cmd_name + " " + usage) if usage else " ".join(cmd_usage),
             description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
-            alias=alias.lower().split() if alias else []
+            alias=alias.lower().split() if alias else [],
+            require_login=require_login
         ))
+
+        return wrapped
 
     return decorator
 
@@ -68,7 +79,7 @@ def parse_command(text: str):
     try:
         cmd.function(*args[1:])
     except TypeError:
-        return cmd.usage
+        print(cmd.usage)
 
 
 @command(name="exit", alias="quit stop")
@@ -84,13 +95,13 @@ def cmd_exit():
 
 
 @command(alias="say")
-def echo(*text: str):
+def echo(*text):
     """ Skriver litt tekst. """
     print(" ".join(text))
 
 
 @command(name="help", alias="?")
-def cmd_help(name: str):
+def cmd_help(name):
     """ Viser hjelp. """
     cmd = get_command(name)
 
@@ -118,7 +129,7 @@ def check_logged_in():
 
 
 @command(alias="connect", usage="<host>:[port]")
-def login(host_str: str):
+def login(host_str):
     """ Opprett forbinelse til en FTP server. """
     global logged_in
 
@@ -163,34 +174,34 @@ def login(host_str: str):
             break
 
 
-@command(alias="disconnect")
+@command(alias="disconnect", require_login=True)
 def logout():
     """ Koble fra FTP serveren. """
     global logged_in
-
-    if not check_logged_in():
-        return
 
     ftp.quit()
     logged_in = False
 
 
-@command()
-def cd(path: str):
+@command(require_login=True)
+def cd(path):
     """ Hopp til en mappe. """
-    if not check_logged_in():
-        return
-
     ftp.cwd(path)
 
 
-@command(alias="dir l list files")
-def ls(path: str=None):
+@command(alias="dir l list files", require_login=True)
+def ls(path=None):
     """ Se filene i gjeldene eller spesifisert mappe. """
-    if not check_logged_in():
-        return
-
     ftp.dir(path)
+
+
+@command(alias="rename", require_login=True)
+def ren(target, name):
+    """ Gi nytt navn til en fil eller mappe. """
+    try:
+        ftp.rename(target, name)
+    except ftplib.error_perm:
+        print("Tilgang avvist.")
 
 
 def main():
