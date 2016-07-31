@@ -8,6 +8,7 @@ from functools import wraps
 import inspect
 import os
 from getpass import getpass
+import re
 
 try:
     import readline
@@ -175,9 +176,9 @@ def check_logged_in():
     return True
 
 
-@command(alias="connect", usage="<host>:[port]")
-def login(host_str):
-    """ Opprett forbinelse til en FTP server. """
+@command(alias="connect start init", usage="<host>:[port] [username]")
+def login(host_str, user=None):
+    """ Opprett forbinelse til en FTP-server. """
     global logged_in, home_path
 
     if logged_in is not None:
@@ -197,10 +198,12 @@ def login(host_str):
 
     # Koble til med host og port
     ftp.connect(host, port, timeout=10)
+    specified_user = False if user is None else True
 
     while True:
         # Spør om brukernavn og passord
-        user = input("Brukernavn: ")
+        if not specified_user:
+            user = input("Brukernavn: ")
         pwd = getpass("Passord: ")
 
         # Login med en bruker
@@ -208,6 +211,8 @@ def login(host_str):
             ftp.login(user, pwd)
         except KeyboardInterrupt:
             break
+        except Exception as e:
+            print(e)
         else:
             logged_in = user
             home_path = ftp.pwd()
@@ -231,15 +236,27 @@ def cd(path):
     ftp.cwd(path)
 
 
-@command(alias="dir l list files", require_login=True)
+@command(alias="dir l list", require_login=True)
 def ls(path=None):
     """ Se filene i gjeldene eller spesifisert mappe. """
     ftp.dir(path)
 
 
-@command(alias="rename", require_login=True)
-def ren(target, name):
-    """ Gi nytt navn til en fil eller mappe. """
+@command(alias="move ren rename", require_login=True)
+def mv(target, name):
+    """ Beveg eller endre navn til en fil eller mappe. """
+    # Dersom brukeren ønsker å skrive litt mindre
+    auto_name = re.split(r"[/\\]+", target)[-1]
+
+    if name == ".":  # Om de bare skriver . vil de ha samme filnavn i gjeldende mappe
+        name = auto_name
+    elif name.startswith("."):  # Om det starter på . fjern dotten!!
+        name = name[1:]
+
+    # Om navnet slutter med / eller \ vil vi legge til navnet automatisk
+    if name.endswith("/") or name.endswith("\\"):
+        name += auto_name
+
     ftp.rename(target, name)
 
 
@@ -249,7 +266,13 @@ def rm(target):
     ftp.delete(target)
 
 
-@command(alias="removedir dirrm", require_login=True)
+@command(alias="makedir dirmk mkd", require_login=True)
+def mkdir(name):
+    """ Lager en ny mappe i FTP-serveren. """
+    ftp.mkd(name)
+
+
+@command(alias="removedir dirrm rmd", require_login=True)
 def rmdir(target):
     """ Sletter valgt mappe fra FTP-serveren. """
     ftp.rmd(target)
