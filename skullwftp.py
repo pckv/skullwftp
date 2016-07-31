@@ -34,7 +34,7 @@ def command(name: str=None, alias: str=None, usage=None):
         commands.append(Command(
             name=cmd_name.lower(),
             function=func,
-            usage=" ".join(usage),
+            usage=" ".join(cmd_usage) or usage,
             description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
             alias=alias.lower().split() if alias else []
         ))
