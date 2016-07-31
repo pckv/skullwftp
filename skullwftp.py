@@ -266,6 +266,7 @@ def setprompt(*user_prompt):
 
 def main():
     """ Velkommen a. """
+    global logged_in
     print("Velkommen.\n")
 
     while running:
@@ -282,6 +283,10 @@ def main():
         except (KeyboardInterrupt, SystemExit):
             if logged_in is not None:
                 ftp.quit()
+        except ftplib.error_temp as e:
+            if str(e).startswith("421"):
+                print("Tilkoblingen ble avbrutt av verten.")
+                logged_in = None
         else:
             if cmd:
                 parse_command(cmd)
