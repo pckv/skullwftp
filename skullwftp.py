@@ -6,6 +6,7 @@ import shlex
 from collections import namedtuple
 from functools import wraps
 import inspect
+import os
 
 try:
     import readline
@@ -127,6 +128,12 @@ def cmd_exit():
 def echo(*text):
     """ Skriver text. """
     print(" ".join(text))
+
+
+@command(alias="cls")
+def clear():
+    """ Fjern all tekst fra terminalen. """
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 @command(name="help", alias="?", usage="command")
