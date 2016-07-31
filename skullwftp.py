@@ -1,12 +1,16 @@
 """ Dette er selveste skullWFTP
 """
 
-import socket
 import ftplib
 import shlex
 from collections import namedtuple
 from functools import wraps
 import inspect
+
+try:
+    import readline
+except ImportError:
+    pass
 
 
 commands = []
@@ -177,15 +181,14 @@ def login(host_str):
     host = values[0]
     port = values[1] if len(values) > 1 else 21
 
-    # Koble til med host og port
     try:
-        ftp.connect(host, port, timeout=10)
-    except socket.timeout:
-        print("Tok for lang tid til å etablere en kobling.")
+        port = int(port)
+    except ValueError:
+        print("Port må være et heltall fra og med 0 til 65535. ")
         return
-    except socket.gaierror:
-        print("Kunne ikke finne host.")
-        return
+
+    # Koble til med host og port
+    ftp.connect(host, port, timeout=10)
 
     while True:
         # Spør om brukernavn og passord
@@ -195,21 +198,17 @@ def login(host_str):
         # Login med en bruker
         try:
             ftp.login(user, pwd)
-        except ftplib.error_perm:
-            print("Brukernavn eller passord er feil. Prøv igjen.")
-        except ConnectionAbortedError:
-            print("Verten avslo din forespørsel.")
         except KeyboardInterrupt:
             break
         else:
             logged_in = user
-            print("Koblet til {}".format(host_str), ftp.getwelcome(), sep="\n\n", end="\n\n")
+            print("Koblet til {}:{}".format(host, port), ftp.getwelcome(), sep="\n\n", end="\n\n")
             break
 
 
 @command(alias="disconnect", require_login=True)
 def logout():
-    """ Koble fra FTP serveren. """
+    """ Koble fra FTP-serveren. """
     global logged_in
 
     ftp.quit()
@@ -236,12 +235,13 @@ def ren(target, name):
 
 @command(alias="delete remove rm", require_login=True)
 def rm(target):
-    """Sletter valgt fil fra FTP-serveren"""
+    """ Sletter valgt fil fra FTP-serveren. """
     ftp.delete(target)
+
 
 @command(alias="removedir dirrm", require_login=True)
 def rmdir(target):
-    """Sletter valgt mappe fra FTP-serveren"""
+    """ Sletter valgt mappe fra FTP-serveren. """
     ftp.rmd(target)
 
 
@@ -252,8 +252,6 @@ def setprompt(*user_prompt):
 
     prompt = " ".join(user_prompt)
     print("Oppdaterte prompt.")
-
-
 
 
 def main():
