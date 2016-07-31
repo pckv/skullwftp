@@ -250,7 +250,7 @@ def mv(target, name):
 
     if name == ".":  # Om de bare skriver . vil de ha samme filnavn i gjeldende mappe
         name = auto_name
-    elif name.startswith("."):  # Om det starter på . fjern dotten!!
+    elif name.startswith(".") and not name.startswith(".."):  # Om det starter på . fjern dotten!!
         name = name[1:]
 
     # Om navnet slutter med / eller \ vil vi legge til navnet automatisk
