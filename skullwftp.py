@@ -243,8 +243,14 @@ def setprompt(*user_prompt):
     print("Oppdaterte prompt.")
 
 
+@command(alias="delete remove rm", require_login=True)
+def rm(target):
+    """Sletter valgt fil fra FTP-serveren"""
+    ftp.delete(target)
+
+
 def main():
-    """ Gjør hele skiten. """
+    """ Velkommen a. """
     print("Velkommen.\n")
 
     while running:
@@ -266,3 +272,5 @@ def main():
 # Dette betyr bare at vi skal kjøre de gangene programmet faktisk starter
 if __name__ == "__main__":
     main()
+
+
