@@ -234,6 +234,12 @@ def ren(target, name):
     ftp.rename(target, name)
 
 
+@command(alias="delete remove rm", require_login=True)
+def rm(target):
+    """Sletter valgt fil fra FTP-serveren"""
+    ftp.delete(target)
+
+
 @command(alias="prompt", usage="<prompt>", require_arg=True)
 def setprompt(*user_prompt):
     """ Sett en ny prompt. """
@@ -243,10 +249,6 @@ def setprompt(*user_prompt):
     print("Oppdaterte prompt.")
 
 
-@command(alias="delete remove rm", require_login=True)
-def rm(target):
-    """Sletter valgt fil fra FTP-serveren"""
-    ftp.delete(target)
 
 
 def main():
