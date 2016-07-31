@@ -10,12 +10,13 @@ import inspect
 
 
 commands = []
-Command = namedtuple("Command", "name function usage description alias require_login")
+Command = namedtuple("Command", "name function usage description alias require_login require_arg")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
-def command(name: str=None, alias: str=None, usage=None, require_login=False):
+def command(name: str=None, alias: str=None, usage: str=None, description: str=None,
+            require_login: bool=False, require_arg: bool=False):
     """ Legger til en command. Eksempel:
 
         @command()
@@ -23,29 +24,50 @@ def command(name: str=None, alias: str=None, usage=None, require_login=False):
             print("going to", path)
     """
     def decorator(func):
+        cmd_name = name or func.__name__
+        signature = inspect.signature(func)
+        cmd_usage = [cmd_name]
+
+        # Formater usage slik at den er lik funksjonen
+        for i, param in enumerate(signature.parameters.values()):
+            # Sett navnet til argumentet
+            arg_name = param.name
+            if usage is not None:
+                if len(usage.split()) > i:
+                    usage_arg = usage.split()[i]
+
+                    # Vi vil ha den til å være PRIKK LIK om usage inneholder en [ eller <
+                    if "<" in usage_arg or "[" in usage_arg:
+                        cmd_usage.append(usage_arg)
+                        continue
+
+                    arg_name = usage_arg
+
+            if param.default is param.empty or require_arg:
+                cmd_usage.append("<" + arg_name + ">")
+            else:
+                cmd_usage.append("[" + arg_name + "]")
+        cmd_usage = " ".join(cmd_usage)
+
         @wraps(func)
         def wrapped(*args, **kwargs):
             if require_login and not check_logged_in():
                 return
 
+            if require_arg and not args and not kwargs:
+                print(cmd_usage)
+                return
+
             func(*args, **kwargs)
-
-        cmd_name = name or func.__name__
-
-        signature = inspect.signature(func)
-        cmd_usage = [cmd_name]
-
-        # Formater usage slik at den er lik funksjonen
-        for param in signature.parameters.values():
-            cmd_usage.append("<" + param.name + ">")
 
         commands.append(Command(
             name=cmd_name.lower(),
             function=wrapped,
-            usage=(cmd_name + " " + usage) if usage else " ".join(cmd_usage),
-            description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
+            usage=cmd_usage,
+            description=description or (inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse."),
             alias=alias.lower().split() if alias else [],
-            require_login=require_login
+            require_login=require_login,
+            require_arg=require_arg
         ))
 
         return wrapped
@@ -87,41 +109,52 @@ def cmd_exit():
     """ Avslutter skullWFTP. """
     global running, logged_in
 
+    # Logg ut dersom vi er innlogget
     if logged_in:
         ftp.quit()
-        logged_in = False
+        logged_in = None
 
     running = False
 
 
 @command(alias="say")
 def echo(*text):
-    """ Skriver litt tekst. """
+    """ Skriver text. """
     print(" ".join(text))
 
 
-@command(name="help", alias="?")
-def cmd_help(name):
+@command(name="help", alias="?", usage="command")
+def cmd_help(name=None):
     """ Viser hjelp. """
-    cmd = get_command(name)
+    if name is None:
+        print("\nKommandoer:")
 
-    if cmd:
-        print(cmd.usage, cmd.description, sep=" : ")
-
-        if cmd.alias:
-            print("Alias:", ", ".join(cmd.alias))
+        # Vis alle kommandoer
+        max_length = len(max(cmd.usage for cmd in commands)) + 1
+        for cmd in commands:
+            print("{cmd.usage: <{spacing}} : {cmd.description}".format(cmd=cmd, spacing=max_length))
     else:
-        print("Kommando {} eksisterer ikke.".format(name))
+        # Vis hjelp til gitt kommando
+        cmd = get_command(name)
+
+        if cmd:
+            print(cmd.usage, cmd.description, sep=" : ")
+
+            if cmd.alias:
+                print("Alias:", ", ".join(cmd.alias))
+        else:
+            print("Kommando {} eksisterer ikke.".format(name))
 
 
 # FTP relatert
 ftp = ftplib.FTP()
-logged_in = False
+logged_in = None
+prompt = "{user}@{host}:{dir}"
 
 
 def check_logged_in():
     """ Returnerer True/False og printer ved False. """
-    if not logged_in:
+    if logged_in is None:
         print("Du er ikke logget inn på noen FTP server.")
         return False
 
@@ -133,7 +166,7 @@ def login(host_str):
     """ Opprett forbinelse til en FTP server. """
     global logged_in
 
-    if logged_in:
+    if logged_in is not None:
         print("Du er allerede logget inn.")
         return
 
@@ -167,9 +200,7 @@ def login(host_str):
         except KeyboardInterrupt:
             break
         else:
-            ftp.user = user
-            logged_in = True
-
+            logged_in = user
             print("Koblet til {}".format(host_str), ftp.getwelcome(), sep="\n\n", end="\n\n")
             break
 
@@ -180,7 +211,7 @@ def logout():
     global logged_in
 
     ftp.quit()
-    logged_in = False
+    logged_in = None
 
 
 @command(require_login=True)
@@ -204,15 +235,29 @@ def ren(target, name):
         print("Tilgang avvist.")
 
 
+@command(alias="prompt", usage="<prompt>", require_arg=True)
+def setprompt(*user_prompt):
+    """ Sett en ny prompt. """
+    global prompt
+
+    prompt = " ".join(user_prompt)
+    print("Oppdaterte prompt.")
+
+
 def main():
     """ Gjør hele skiten. """
     print("Velkommen.\n")
 
     while running:
         try:
-            cmd = input(("skullWFTP" if not logged_in else "{0.user}@{0.host}:{1}".format(ftp, ftp.pwd())) + " $ ")
+            # Sett prompt
+            cmd_prompt = "skullWFTP"
+            if logged_in is not None:
+                cmd_prompt = prompt.format(host=ftp.host, port=ftp.port, user=logged_in, dir=ftp.pwd())
+
+            cmd = input(cmd_prompt + " $ ")
         except (KeyboardInterrupt, SystemExit):
-            if logged_in:
+            if logged_in is not None:
                 ftp.quit()
         else:
             if cmd:
