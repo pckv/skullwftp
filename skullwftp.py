@@ -239,6 +239,11 @@ def rm(target):
     """Sletter valgt fil fra FTP-serveren"""
     ftp.delete(target)
 
+@command(alias="removedir dirrm", require_login=True)
+def rmdir(target):
+    """Sletter valgt mappe fra FTP-serveren"""
+    ftp.rmd(target)
+
 
 @command(alias="prompt", usage="<prompt>", require_arg=True)
 def setprompt(*user_prompt):
