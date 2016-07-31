@@ -1,6 +1,7 @@
 """ Dette er selveste skullWFTP
 """
 
+import socket
 import ftplib
 import shlex
 from collections import namedtuple
@@ -34,7 +35,7 @@ def command(name: str=None, alias: str=None):
             name=cmd_name.lower(),
             function=func,
             usage=" ".join(usage),
-            description=inspect.cleandoc(func.__doc__),
+            description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
             alias=alias.lower().split() if alias else []
         ))
 
@@ -73,7 +74,12 @@ def parse_command(text: str):
 @command(name="exit", alias="quit stop")
 def cmd_exit():
     """ Avslutter skullWFTP. """
-    global running
+    global running, logged_in
+
+    if logged_in:
+        ftp.quit()
+        logged_in = False
+
     running = False
 
 
@@ -94,13 +100,103 @@ def cmd_help(name: str):
         print("Kommando {} eksisterer ikke.".format(name))
 
 
+# FTP relatert
+ftp = ftplib.FTP()
+logged_in = False
+
+
+def check_logged_in():
+    """ Returnerer True/False og printer ved False. """
+    if not logged_in:
+        print("Du er ikke logget inn på noen FTP server.")
+        return False
+
+    return True
+
+
+@command()
+def login(host_str: str):
+    """ Opprett forbinelse til en FTP server. """
+    global logged_in
+
+    if logged_in:
+        print("Du er allerede logget inn.")
+        return
+
+    # Splitt den gitte hosten med kolon for å separere IP med port
+    values = host_str.split(":")
+    host = values[0]
+    port = values[1] if len(values) > 1 else 21
+
+    # Koble til med host og port
+    try:
+        ftp.connect(host, port, timeout=10)
+    except socket.timeout:
+        print("Kunne ikke etablere tilkobling.")
+        return
+
+    while True:
+        # Spør om brukernavn og passord
+        user = input("Brukernavn: ")
+        pwd = input("Passord: ")
+
+        # Login med en bruker
+        try:
+            ftp.login(user, pwd)
+        except ftplib.error_perm:
+            print("Kunne ikke logge inn. Prøv igjen.")
+        except KeyboardInterrupt:
+            break
+        else:
+            ftp.user = user
+            logged_in = True
+
+            print("Koblet til {}".format(host_str), ftp.getwelcome(), sep="\n\n", end="\n\n")
+            break
+
+
+@command()
+def logout():
+    """ Koble fra FTP serveren. """
+    global logged_in
+
+    if not check_logged_in():
+        return
+
+    ftp.quit()
+    logged_in = False
+
+
+@command()
+def cd(path: str):
+    """ Hopp til en mappe. """
+    if not check_logged_in():
+        return
+
+    ftp.cwd(path)
+
+
+@command(alias="dir l list files")
+def ls(path: str=None):
+    """ Se filene i gjeldene eller spesifisert mappe. """
+    if not check_logged_in():
+        return
+
+    ftp.dir(path)
+
+
 def main():
     """ Gjør hele skiten. """
     print("Velkommen.\n")
 
     while running:
-        cmd = input("skullWFTP $ ")
-        parse_command(cmd)
+        try:
+            cmd = input(("skullWFTP" if not logged_in else "{0.user}@{0.host}:{1}".format(ftp, ftp.pwd())) + " $ ")
+        except (KeyboardInterrupt, SystemExit):
+            if logged_in:
+                ftp.quit()
+        else:
+            parse_command(cmd)
 
 
 # Dette betyr bare at vi skal kjøre de gangene programmet faktisk starter
