@@ -119,8 +119,7 @@ def cmd_exit():
 
     # Logg ut dersom vi er innlogget
     if logged_in:
-        ftp.quit()
-        logged_in = None
+        logout()
 
     running = False
 
@@ -163,6 +162,7 @@ def cmd_help(name=None):
 # FTP relatert
 ftp = ftplib.FTP()
 logged_in = None
+home_path = None
 prompt = "{user}@{host}:{dir}"
 
 
@@ -178,7 +178,7 @@ def check_logged_in():
 @command(alias="connect", usage="<host>:[port]")
 def login(host_str):
     """ Opprett forbinelse til en FTP server. """
-    global logged_in
+    global logged_in, home_path
 
     if logged_in is not None:
         print("Du er allerede logget inn.")
@@ -210,7 +210,8 @@ def login(host_str):
             break
         else:
             logged_in = user
-            print("Koblet til {}:{}".format(host, port), ftp.getwelcome(), sep="\n\n", end="\n\n")
+            home_path = ftp.pwd()
+            print("Koblet til {0.host}:{0.port}".format(ftp), ftp.getwelcome(), sep="\n\n", end="\n\n")
             break
 
 
@@ -219,6 +220,7 @@ def logout():
     """ Koble fra FTP-serveren. """
     global logged_in
 
+    print("Koblet fra {0.host}:{0.port}".format(ftp))
     ftp.quit()
     logged_in = None
 
@@ -271,7 +273,10 @@ def main():
             # Sett prompt
             cmd_prompt = "skullWFTP"
             if logged_in is not None:
-                cmd_prompt = prompt.format(host=ftp.host, port=ftp.port, user=logged_in, dir=ftp.pwd())
+                cmd_prompt = prompt.format(host=ftp.host,
+                                           port=ftp.port,
+                                           user=logged_in,
+                                           dir=ftp.pwd().replace(home_path, "~"))
 
             cmd = input(cmd_prompt + " $ ")
         except (KeyboardInterrupt, SystemExit):
