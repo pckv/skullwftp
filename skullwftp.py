@@ -102,6 +102,8 @@ def parse_command(text: str):
         cmd.function(*args[1:])
     except TypeError:
         print(cmd.usage)
+    except ftplib.all_errors as e:
+        print(e)
 
 
 @command(name="exit", alias="quit stop")
@@ -229,10 +231,7 @@ def ls(path=None):
 @command(alias="rename", require_login=True)
 def ren(target, name):
     """ Gi nytt navn til en fil eller mappe. """
-    try:
-        ftp.rename(target, name)
-    except ftplib.error_perm:
-        print("Tilgang avvist.")
+    ftp.rename(target, name)
 
 
 @command(alias="prompt", usage="<prompt>", require_arg=True)
