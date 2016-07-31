@@ -14,7 +14,7 @@ Command = namedtuple("Command", "name function usage description alias")
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
-def command(name: str=None, alias: str=None):
+def command(name: str=None, alias: str=None, usage=None):
     """ Legger til en command. Eksempel:
 
         @command()
@@ -34,7 +34,7 @@ def command(name: str=None, alias: str=None):
         commands.append(Command(
             name=cmd_name.lower(),
             function=func,
-            usage=" ".join(usage),
+            usage=usage or " ".join(usage),
             description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
             alias=alias.lower().split() if alias else []
         ))
@@ -147,7 +147,7 @@ def login(host_str: str):
         try:
             ftp.login(user, pwd)
         except ftplib.error_perm:
-            print("Kunne ikke logge inn. Prøv igjen.")
+            print("Brukernavn eller passord er feil. Prøv igjen.")
         except KeyboardInterrupt:
             break
         else:
