@@ -25,16 +25,16 @@ def command(name: str=None, alias: str=None, usage=None):
         cmd_name = name or func.__name__
 
         signature = inspect.signature(func)
-        usage = [cmd_name]
+        cmd_usage = [cmd_name]
 
         # Formater usage slik at den er lik funksjonen
         for param in signature.parameters.values():
-            usage.append("<" + param.name + ">")
+            cmd_usage.append("<" + param.name + ">")
 
         commands.append(Command(
             name=cmd_name.lower(),
             function=func,
-            usage=usage or " ".join(usage),
+            usage=" ".join(usage),
             description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
             alias=alias.lower().split() if alias else []
         ))
@@ -148,6 +148,8 @@ def login(host_str: str):
             ftp.login(user, pwd)
         except ftplib.error_perm:
             print("Brukernavn eller passord er feil. Prøv igjen.")
+        except ConnectionAbortedError:
+            print("Verten avslo din forespørsel.")
         except KeyboardInterrupt:
             break
         else:
