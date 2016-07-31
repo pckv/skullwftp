@@ -114,7 +114,7 @@ def check_logged_in():
     return True
 
 
-@command()
+@command(alias="connect")
 def login(host_str: str):
     """ Opprett forbinelse til en FTP server. """
     global logged_in
@@ -132,7 +132,10 @@ def login(host_str: str):
     try:
         ftp.connect(host, port, timeout=10)
     except socket.timeout:
-        print("Kunne ikke etablere tilkobling.")
+        print("Tok for lang tid til å etablere en kobling.")
+        return
+    except socket.gaierror:
+        print("Kunne ikke finne host.")
         return
 
     while True:
@@ -155,7 +158,7 @@ def login(host_str: str):
             break
 
 
-@command()
+@command(alias="disconnect")
 def logout():
     """ Koble fra FTP serveren. """
     global logged_in
