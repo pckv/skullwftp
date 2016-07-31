@@ -7,6 +7,7 @@ from collections import namedtuple
 from functools import wraps
 import inspect
 import os
+from getpass import getpass
 
 try:
     import readline
@@ -200,7 +201,7 @@ def login(host_str):
     while True:
         # Spør om brukernavn og passord
         user = input("Brukernavn: ")
-        pwd = input("Passord: ")
+        pwd = getpass("Passord: ")
 
         # Login med en bruker
         try:
