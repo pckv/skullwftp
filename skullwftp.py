@@ -34,7 +34,7 @@ def command(name: str=None, alias: str=None, usage=None):
         commands.append(Command(
             name=cmd_name.lower(),
             function=func,
-            usage=" ".join(cmd_usage) or usage,
+            usage=(cmd_name + " " + usage) if usage else " ".join(cmd_usage),
             description=inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse.",
             alias=alias.lower().split() if alias else []
         ))
@@ -117,7 +117,7 @@ def check_logged_in():
     return True
 
 
-@command(alias="connect")
+@command(alias="connect", usage="<host>:[port]")
 def login(host_str: str):
     """ Opprett forbinelse til en FTP server. """
     global logged_in
