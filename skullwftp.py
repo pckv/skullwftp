@@ -19,13 +19,13 @@ except ImportError:
 
 
 commands = []
-Command = namedtuple("Command", "name function usage description alias require_login rest_is_raw")
+Command = namedtuple("Command", "name function usage description alias require_login rest")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
 def command(name: str=None, alias: str=None, usage: str=None, description: str=None,
-            require_login: bool=False, rest_is_raw: bool=False):
+            require_login: bool=False, rest: bool=True):
     """ Decorator som legger til en command. Eksempel:
 
         ```
@@ -39,7 +39,7 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
         :param usage: Hvordan man bruker commandoen. Dette er suffix som "<path>" eller "path".
         :param description: Kommandoens beskrivelse. Om denne ikke er oppgit, blir funksjonens docstring brukt.
         :param require_login: Om denne er True kreves det å være logget inn på en FTP-server for å bruke kommandoen.
-        :param rest_is_raw: Om denne er True legges til alt inkl. whitespace i det siste argumentet.
+        :param rest: Om denne er True legges til alt inkl. whitespace i det siste argumentet.
     """
     def decorator(func):
         cmd_name = name or func.__name__
@@ -81,7 +81,7 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
             description=description or (inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse."),
             alias=alias.lower().split() if alias else [],
             require_login=require_login,
-            rest_is_raw=rest_is_raw
+            rest=rest
         ))
 
         return wrapped
@@ -123,11 +123,11 @@ def parse_command(text: str):
         print(cmd.usage)
         return
 
-    # Her vil vi skjekke om rest_is_raw er True, og i dette tilfellet ønsker vi å putte
+    # Her vil vi skjekke om rest er True, og i dette tilfellet ønsker vi å putte
     # alle gitte argumenter som overskriver funksjonens ønskede argumenter i det siste argumentet.
     len_args = len(inspect.signature(cmd.function).parameters)
     parsed_args = args[1:len_args + 1]
-    if cmd.rest_is_raw and len_args and len(args[1:]) > len_args:
+    if cmd.rest and len_args and len(args[1:]) > len_args:
         parsed_args[-1] = " ".join(args[len_args:])
 
     try:
@@ -150,7 +150,7 @@ def cmd_exit():
     running = False
 
 
-@command(alias="say", rest_is_raw=True)
+@command(alias="say")
 def echo(text=""):
     """ Skriver text. """
     print(text)
@@ -162,7 +162,7 @@ def clear():
     os.system("cls" if os.name == "nt" else "clear")
 
 
-@command(name="help", alias="?", usage="command")
+@command(name="help", alias="?", usage="command", rest=False)
 def cmd_help(name=None):
     """ Viser hjelp. """
     if name is None:
@@ -201,7 +201,7 @@ def check_logged_in():
     return True
 
 
-@command(alias="connect start init", usage="<host>:[port] [username]")
+@command(alias="connect start init", usage="<host>:[port] [username]", rest=False)
 def login(host_str, user=None):
     """ Opprett forbinelse til en FTP-server. """
     global logged_in, home_path
@@ -303,7 +303,7 @@ def rmdir(target):
     ftp.rmd(target)
 
 
-@command(alias="prompt", usage="prompt", rest_is_raw=True)
+@command(alias="prompt", usage="prompt")
 def setprompt(user_prompt):
     """ Sett en ny prompt. """
     global prompt
