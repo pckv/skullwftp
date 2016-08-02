@@ -10,6 +10,8 @@ import os
 from getpass import getpass
 import re
 
+# Vi forsøker å importere readline, som sikkert nok ikke funker til Windows :(
+# Denne overskriver input() funksjonen slik at den støtter message history og liknende
 try:
     import readline
 except ImportError:
@@ -17,18 +19,27 @@ except ImportError:
 
 
 commands = []
-Command = namedtuple("Command", "name function usage description alias require_login require_arg")
+Command = namedtuple("Command", "name function usage description alias require_login rest_is_raw")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
 
 
 def command(name: str=None, alias: str=None, usage: str=None, description: str=None,
-            require_login: bool=False, require_arg: bool=False):
-    """ Legger til en command. Eksempel:
+            require_login: bool=False, rest_is_raw: bool=False):
+    """ Decorator som legger til en command. Eksempel:
 
+        ```
         @command()
         def cd(path):
             print("going to", path)
+        ```
+
+        :param name: Navnet til kommandoen. Om denne ikke er oppgit, blir funksjonens navn brukt.
+        :param alias: Eventuelle aliaser oppgitt som en string med hver alias separert med whitespace.
+        :param usage: Hvordan man bruker commandoen. Dette er suffix som "<path>" eller "path".
+        :param description: Kommandoens beskrivelse. Om denne ikke er oppgit, blir funksjonens docstring brukt.
+        :param require_login: Om denne er True kreves det å være logget inn på en FTP-server for å bruke kommandoen.
+        :param rest_is_raw: Om denne er True legges til alt inkl. whitespace i det siste argumentet.
     """
     def decorator(func):
         cmd_name = name or func.__name__
@@ -50,7 +61,7 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
 
                     arg_name = usage_arg
 
-            if param.default is param.empty or require_arg:
+            if param.default is param.empty:
                 cmd_usage.append("<" + arg_name + ">")
             else:
                 cmd_usage.append("[" + arg_name + "]")
@@ -59,10 +70,6 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
         @wraps(func)
         def wrapped(*args, **kwargs):
             if require_login and not check_logged_in():
-                return
-
-            if require_arg and not args and not kwargs:
-                print(cmd_usage)
                 return
 
             func(*args, **kwargs)
@@ -74,7 +81,7 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
             description=description or (inspect.cleandoc(func.__doc__) if func.__doc__ else "Ingen beskrivelse."),
             alias=alias.lower().split() if alias else [],
             require_login=require_login,
-            require_arg=require_arg
+            rest_is_raw=rest_is_raw
         ))
 
         return wrapped
@@ -82,8 +89,11 @@ def command(name: str=None, alias: str=None, usage: str=None, description: str=N
     return decorator
 
 
-def get_command(name: str):
-    """ Finn en command med gitt navn. """
+def get_command(name: str) -> Command:
+    """ Finn en Command som kan kalles med name.
+
+        :param name: Enten navnet til kommandoen eller en av kommandoens alias.
+        :returns: Command eller None."""
     for cmd in commands:
         # Vi skjekker med lowercase for å være vennlig
         if cmd.name == name.lower() or name.lower() in cmd.alias:
@@ -93,23 +103,38 @@ def get_command(name: str):
 
 
 def parse_command(text: str):
-    """ Parse en command. Vi gjør altså tekst om til en funksjon. """
+    """ Parse en command. Vi gjør altså tekst om til en funksjon.
+
+        :param text: Tekst som skal leses som kommando. Det første argumentet må være en kjent kommando.
+    """
     # Først splitter vi argumentene slik at vi deler opp f.eks "cd home" til "cd" og "home"
     args = shlex.split(text)
 
-    # Så skjekker vi om vi har et argument
+    # Så leter vi etter en command med navnet til det første argumentet
     cmd = get_command(args[0])
 
-    # Det er ingen command med det gitte navnet så vi bare returnerer en feilmelding
+    # Det er ingen command med det gitte navnet så vi bare returner (da vil altså ingenting skje)
     if cmd is None:
-        return "Det finnes ingen slik command."
+        return
 
-    # Vi har commanden, så vi skal bare ploppe alle argumentene inn i funksjonen
-    try:
-        cmd.function(*args[1:])
-    except TypeError:
+    # Dersom den gitte teksten ikke har nok nødvendige argumenter stopper vi og sender bruksmetoden til kommandoen
+    len_required = sum(1 for p in inspect.signature(cmd.function).parameters.values() if p.default is p.empty)
+    if len(args[1:]) < len_required:
         print(cmd.usage)
+        return
+
+    # Her vil vi skjekke om rest_is_raw er True, og i dette tilfellet ønsker vi å putte
+    # alle gitte argumenter som overskriver funksjonens ønskede argumenter i det siste argumentet.
+    len_args = len(inspect.signature(cmd.function).parameters)
+    parsed_args = args[1:len_args + 1]
+    if cmd.rest_is_raw and len_args and len(args[1:]) > len_args:
+        parsed_args[-1] = " ".join(args[len_args:])
+
+    try:
+        # Vi har commanden, så vi skal bare ploppe alle argumentene inn i funksjonen
+        cmd.function(*parsed_args)
     except ftplib.all_errors as e:
+        # Dersom det er en error i ftplib printer vi den. Sparer oss for mye arbeid dette her
         print(e)
 
 
@@ -125,10 +150,10 @@ def cmd_exit():
     running = False
 
 
-@command(alias="say")
-def echo(*text):
+@command(alias="say", rest_is_raw=True)
+def echo(text=""):
     """ Skriver text. """
-    print(" ".join(text))
+    print(text)
 
 
 @command(alias="cls")
@@ -231,7 +256,7 @@ def logout():
 
 
 @command(require_login=True)
-def cd(path):
+def cd(path=""):
     """ Hopp til en mappe. """
     ftp.cwd(path)
 
@@ -278,12 +303,11 @@ def rmdir(target):
     ftp.rmd(target)
 
 
-@command(alias="prompt", usage="<prompt>", require_arg=True)
-def setprompt(*user_prompt):
+@command(alias="prompt", usage="prompt", rest_is_raw=True)
+def setprompt(user_prompt):
     """ Sett en ny prompt. """
     global prompt
-
-    prompt = " ".join(user_prompt)
+    prompt = user_prompt
     print("Oppdaterte prompt.")
 
 
