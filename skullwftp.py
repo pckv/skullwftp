@@ -187,7 +187,7 @@ def cmd_help(name=None):
         print("\nKommandoer:")
 
         # Vis alle kommandoer
-        max_length = len(max((cmd.usage for cmd in commands), key=len)) + 1
+        max_length = len(max((cmd.usage for cmd in commands), key=len))
         for cmd in commands:
             print("{cmd.usage: <{spacing}} : {cmd.description}".format(cmd=cmd, spacing=max_length))
     else:

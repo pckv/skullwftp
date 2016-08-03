@@ -1,0 +1,3 @@
+import skullwftp
+
+skullwftp.main()
