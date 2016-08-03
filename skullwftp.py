@@ -4,7 +4,7 @@
 import ftplib
 import shlex
 from collections import namedtuple
-from functools import wraps
+from functools import wraps, partial
 import inspect
 import os
 from getpass import getpass
@@ -16,6 +16,14 @@ try:
     import readline
 except ImportError:
     pass
+
+# Lag download mappe
+_download_path = "downloads/"
+if not os.path.exists(_download_path):
+    os.mkdir(_download_path)
+
+# Lag en funksjon til å joine downloads
+download_path = partial(os.path.join, "downloads/")
 
 
 commands = []
@@ -115,6 +123,7 @@ def parse_command(text: str):
 
     # Det er ingen command med det gitte navnet så vi bare returner (da vil altså ingenting skje)
     if cmd is None:
+        print("Ingen slik kommando. Skjekk \"help\".")
         return
 
     # Dersom den gitte teksten ikke har nok nødvendige argumenter stopper vi og sender bruksmetoden til kommandoen
@@ -136,6 +145,15 @@ def parse_command(text: str):
     except ftplib.all_errors as e:
         # Dersom det er en error i ftplib printer vi den. Sparer oss for mye arbeid dette her
         print(e)
+
+
+def confirm(prompt: str=""):
+    """ Spør brukeren om et ja/nei spørsmål. """
+    result = input(prompt + " [Y/n] ")
+    if result.lower() == "y":
+        return True
+
+    return False
 
 
 @command(name="exit", alias="quit stop")
@@ -169,7 +187,7 @@ def cmd_help(name=None):
         print("\nKommandoer:")
 
         # Vis alle kommandoer
-        max_length = len(max(cmd.usage for cmd in commands)) + 1
+        max_length = len(max((cmd.usage for cmd in commands), key=len)) + 1
         for cmd in commands:
             print("{cmd.usage: <{spacing}} : {cmd.description}".format(cmd=cmd, spacing=max_length))
     else:
@@ -189,7 +207,7 @@ def cmd_help(name=None):
 ftp = ftplib.FTP()
 logged_in = None
 home_path = None
-prompt = "{user}@{host}:{dir}"
+_prompt = "{user}@{host}:{dir}"
 
 
 def check_logged_in():
@@ -303,12 +321,32 @@ def rmdir(target):
     ftp.rmd(target)
 
 
+@command(alias="retr get download getfile")
+def retrieve(path, name):
+    """ Last ned en fil fra FTP-serveren. """
+    # Dersom fila eksisterer spør vi brukeren om han vil overskrive den
+    if os.path.exists(download_path(name)):
+        print("Filen du prover å skrive til eksisterer allerede.")
+        if not confirm("Onsker du å overskrive fila?"):
+            return
+
+    # Skriv til fila
+    try:
+        with open(download_path(name), "wb") as f:
+            ftp.retrbinary("RETR {}".format(path), f.write)
+    except ftplib.all_errors as e:
+        os.remove(download_path(name))
+        raise e
+
+    print("Fil overfort.")
+
+
 @command(alias="prompt", usage="prompt")
 def setprompt(user_prompt):
-    """ Sett en ny prompt. """
-    global prompt
-    prompt = user_prompt
-    print("Oppdaterte prompt.")
+    """ Sett en ny _prompt. """
+    global _prompt
+    _prompt = user_prompt
+    print("Oppdaterte _prompt.")
 
 
 def main():
@@ -318,13 +356,13 @@ def main():
 
     while running:
         try:
-            # Sett prompt
+            # Sett _prompt
             cmd_prompt = "skullWFTP"
             if logged_in is not None:
-                cmd_prompt = prompt.format(host=ftp.host,
-                                           port=ftp.port,
-                                           user=logged_in,
-                                           dir=ftp.pwd().replace(home_path, "~"))
+                cmd_prompt = _prompt.format(host=ftp.host,
+                                            port=ftp.port,
+                                            user=logged_in,
+                                            dir=ftp.pwd().replace(home_path, "~"))
 
             cmd = input(cmd_prompt + " $ ")
         except (KeyboardInterrupt, SystemExit):
