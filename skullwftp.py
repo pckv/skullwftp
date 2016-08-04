@@ -4,7 +4,7 @@
 import ftplib
 import shlex
 from collections import namedtuple
-from functools import wraps, partial
+from functools import wraps
 import inspect
 import os
 from getpass import getpass
@@ -18,13 +18,9 @@ except ImportError:
     pass
 
 # Lag download mappe
-_download_path = "downloads/"
-if not os.path.exists(_download_path):
-    os.mkdir(_download_path)
-
-# Lag en funksjon til å joine downloads
-download_path = partial(os.path.join, "downloads/")
-
+download_path = "downloads/"
+if not os.path.exists(download_path):
+    os.mkdir(download_path)
 
 commands = []
 Command = namedtuple("Command", "name function usage description alias require_login rest")
@@ -116,7 +112,11 @@ def parse_command(text: str):
         :param text: Tekst som skal leses som kommando. Det første argumentet må være en kjent kommando.
     """
     # Først splitter vi argumentene slik at vi deler opp f.eks "cd home" til "cd" og "home"
-    args = shlex.split(text)
+    try:
+        args = shlex.split(text)
+    except ValueError:
+        print("Kunne ikke lese input. Pass på at quotes er rundt hele argumentet.")
+        return
 
     # Så leter vi etter en command med navnet til det første argumentet
     cmd = get_command(args[0])
@@ -129,7 +129,7 @@ def parse_command(text: str):
     # Dersom den gitte teksten ikke har nok nødvendige argumenter stopper vi og sender bruksmetoden til kommandoen
     len_required = sum(1 for p in inspect.signature(cmd.function).parameters.values() if p.default is p.empty)
     if len(args[1:]) < len_required:
-        print(cmd.usage)
+        print(cmd.usage.replace(cmd.name, args[0]))
         return
 
     # Her vil vi skjekke om rest er True, og i dette tilfellet ønsker vi å putte
@@ -245,15 +245,20 @@ def login(host_str, user=None):
 
     while True:
         # Spør om brukernavn og passord
-        if not specified_user:
-            user = input("Brukernavn: ")
-        pwd = getpass("Passord: ")
+        try:
+            if not specified_user:
+                user = input("Brukernavn: ")
+
+            pwd = getpass("Passord: ")
+        except KeyboardInterrupt:
+            break
+        else:
+            if not pwd or not user:
+                break
 
         # Login med en bruker
         try:
             ftp.login(user, pwd)
-        except KeyboardInterrupt:
-            break
         except Exception as e:
             print(e)
         else:
@@ -324,19 +329,35 @@ def rmdir(target):
 @command(alias="retr get download getfile")
 def retrieve(path, name):
     """ Last ned en fil fra FTP-serveren. """
+    file_path = os.path.join(download_path, name)
+
     # Dersom fila eksisterer spør vi brukeren om han vil overskrive den
-    if os.path.exists(download_path(name)):
+    if os.path.exists(file_path):
         print("Filen du prover å skrive til eksisterer allerede.")
         if not confirm("Onsker du å overskrive fila?"):
             return
 
     # Skriv til fila
     try:
-        with open(download_path(name), "wb") as f:
+        with open(file_path, "wb") as f:
             ftp.retrbinary("RETR {}".format(path), f.write)
     except ftplib.all_errors as e:
-        os.remove(download_path(name))
+        os.remove(file_path)
         raise e
+
+    print("Fil overfort.")
+
+
+@command(alias="stor send sendfile")
+def transfer(path, name):
+    """ Send en fil til FTP-serveren. """
+    # Skjekk om fila som skal bli sendt eksisterer
+    if not os.path.exists(path):
+        print("Finner ikke spesifisert fil.")
+        return
+
+    with open(path, "rb") as f:
+        ftp.storbinary("STOR {}".format(name), f)
 
     print("Fil overfort.")
 
@@ -356,7 +377,7 @@ def main():
 
     while running:
         try:
-            # Sett _prompt
+            # Sett prompt
             cmd_prompt = "skullWFTP"
             if logged_in is not None:
                 cmd_prompt = _prompt.format(host=ftp.host,
