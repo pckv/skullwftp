@@ -370,6 +370,12 @@ def setprompt(user_prompt):
     print("Oppdaterte _prompt.")
 
 
+@command(name="command", alias="cmd sencmd .", require_login=True)
+def send_cmd(cmd):
+    """ Send en FTP-kommando direkte. """
+    print(ftp.sendcmd(cmd))
+
+
 def main():
     """ Velkommen a. """
     global logged_in
@@ -400,6 +406,9 @@ def main():
 
 # Dette betyr bare at vi skal kjøre de gangene programmet faktisk starter
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except EOFError:
+        pass
 
 
