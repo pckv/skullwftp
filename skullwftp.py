@@ -156,6 +156,22 @@ def confirm(prompt: str=""):
     return False
 
 
+def format_pwd():
+    """ Formater nåværende directory path. """
+    pwd = ftp.pwd()
+
+    if pwd.startswith(home_path):
+        pre = "~"
+        if home_path == pwd:
+            pre = "~"
+        elif home_path == "/":
+            pre = "~/"
+
+        pwd = pre + pwd[len(home_path or ""):]
+
+    return pwd
+
+
 @command(name="exit", alias="quit stop")
 def cmd_exit():
     """ Avslutter skullWFTP. """
@@ -264,6 +280,7 @@ def login(host_str, user=None):
         else:
             logged_in = user
             home_path = ftp.pwd()
+
             print("Koblet til {0.host}:{0.port}".format(ftp), ftp.getwelcome(), sep="\n\n", end="\n\n")
             break
 
@@ -389,7 +406,7 @@ def main():
                 cmd_prompt = _prompt.format(host=ftp.host,
                                             port=ftp.port,
                                             user=logged_in,
-                                            dir=ftp.pwd().replace(home_path, "~"))
+                                            dir=format_pwd())
 
             cmd = input(cmd_prompt + " $ ")
         except (KeyboardInterrupt, SystemExit):
@@ -408,7 +425,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except EOFError:
+    except (EOFError, ConnectionAbortedError):
         pass
 
 
