@@ -3,12 +3,13 @@
 
 import ftplib
 import shlex
-from collections import namedtuple
-from functools import wraps
 import inspect
 import os
-from getpass import getpass
 import re
+from argparse import ArgumentParser
+from collections import namedtuple
+from functools import wraps, partial
+from getpass import getpass
 
 # Vi forsøker å importere readline, som sikkert nok ikke funker til Windows :(
 # Denne overskriver input() funksjonen slik at den støtter message history og liknende
@@ -16,6 +17,10 @@ try:
     import readline
 except ImportError:
     pass
+
+_print = print
+_input = input
+light_print = partial(print, end="\n")
 
 # Lag download mappe
 download_path = "downloads/"
@@ -172,6 +177,16 @@ def format_pwd():
     return pwd
 
 
+def format_prompt():
+    """ Formater prompt. """
+    prompt = "skullWFTP"
+    if logged_in is not None:
+        prompt = _prompt.format(
+            host=ftp.host, port=ftp.port, user=logged_in, dir=format_pwd())
+
+    return prompt + " $ "
+
+
 @command(name="exit", alias="quit stop")
 def cmd_exit():
     """ Avslutter skullWFTP. """
@@ -200,12 +215,13 @@ def clear():
 def cmd_help(name=None):
     """ Viser hjelp. """
     if name is None:
-        print("\nKommandoer:")
+        light_print("\nKommandoer:")
 
         # Vis alle kommandoer
         max_length = len(max((cmd.usage for cmd in commands), key=len))
         for cmd in commands:
-            print("{cmd.usage: <{spacing}} : {cmd.description}".format(cmd=cmd, spacing=max_length))
+            light_print("{cmd.usage: <{spacing}} : {cmd.description}".format(cmd=cmd, spacing=max_length))
+        light_print()
     else:
         # Vis hjelp til gitt kommando
         cmd = get_command(name)
@@ -304,7 +320,7 @@ def cd(path=""):
 @command(alias="dir l list", require_login=True)
 def ls(path=None):
     """ Se filene i gjeldene eller spesifisert mappe. """
-    ftp.dir(path)
+    ftp.dir(path, light_print)
 
 
 @command(alias="move ren rename", require_login=True)
@@ -384,7 +400,7 @@ def setprompt(user_prompt):
     """ Sett en ny _prompt. """
     global _prompt
     _prompt = user_prompt
-    print("Oppdaterte _prompt.")
+    print("Oppdaterte prompt.")
 
 
 @command(name="command", alias="cmd sencmd .", require_login=True)
@@ -393,22 +409,15 @@ def send_cmd(cmd):
     print(ftp.sendcmd(cmd))
 
 
-def main():
-    """ Velkommen a. """
+def run_cmd():
+    """ Kjør i cmd. """
     global logged_in
+
     print("Velkommen.\n")
 
     while running:
         try:
-            # Sett prompt
-            cmd_prompt = "skullWFTP"
-            if logged_in is not None:
-                cmd_prompt = _prompt.format(host=ftp.host,
-                                            port=ftp.port,
-                                            user=logged_in,
-                                            dir=format_pwd())
-
-            cmd = input(cmd_prompt + " $ ")
+            cmd = input(format_prompt())
         except (KeyboardInterrupt, SystemExit):
             if logged_in is not None:
                 ftp.quit()
@@ -421,11 +430,126 @@ def main():
                 parse_command(cmd)
 
 
+def run_gui():
+    """ Kjør med GUI. """
+    global print, input, getpass, light_print
+
+    try:
+        import tkinter as tk
+    except ImportError:
+        print("TKinter kreves for å bruke GUI.")
+        return
+
+    print("Starter i GUI modus.")
+
+    # Initialiser Tkinter
+    root = tk.Tk()
+    font = ("Courier New", 12)
+
+    # Ordne output boksen
+    text_output = tk.Text(root, font=font, wrap=tk.WORD, takefocus=tk.NO)
+    text_output.pack(side=tk.TOP, fill=tk.X)
+    text_output.bind("<Key>", lambda e: "break")  # Vi gjør dette for å disable keyboard input
+    text_output.insert(tk.END, "Velkommen.\n\n")
+
+    # Vi lager en ramme for å holde alt av input
+    bottom = tk.Frame(root)
+    bottom.pack(side=tk.BOTTOM)
+
+    # Promptet viser hvilken mappe vi er i og liknende
+    prompt = tk.StringVar(bottom, value=format_prompt())
+    prompt_label = tk.Label(bottom, textvariable=prompt, font=font)
+    prompt_label.pack(side=tk.LEFT)
+
+    # Input boksen skal ta 100 tegn og ligger til høyre for promptet
+    text_input = tk.Entry(bottom, width=100, font=font)
+    text_input.pack(side=tk.LEFT, fill=tk.X)
+
+    def on_enter(_):
+        """ Vi parser kommandoer når brukeren trykker Enter. """
+        text = text_input.get()
+        if text:
+            parse_command(text)
+        text_input.delete(0, tk.END)
+        prompt.set(format_prompt())
+    text_input.bind("<Return>", on_enter)
+
+    # Til slutt har vi en ekstra send knapp som funker på samme måte som når man trykker Enter i input boksen
+    send_button = tk.Button(bottom, text="Send", font=font, takefocus=tk.NO)
+    send_button.pack(side=tk.LEFT)
+    send_button.bind("<Button-1>", on_enter)
+
+    def print(*args, sep=" ", end="\n\n"):
+        """ Overskriv print funksjonen til å bruke GUI. """
+        text_output.insert(tk.END, sep.join(str(a) for a in args) + end)
+        text_output.see(tk.END)
+    light_print = partial(print, end="\n")
+
+    def input(*args, sep=" ", show=""):
+        """ Overskriv input funksjonen til å åpne en egendefinert dialog. """
+        # Initialiser det nye vinduet
+        top = tk.Toplevel(root)
+        top.resizable(0, 0)
+
+        # Lag en label på toppen som viser prompt
+        tk.Label(top, text=sep.join(str(a) for a in args), font=font).pack(side=tk.LEFT)
+
+        # Entry boksen får ligge til siden for labelen
+        entry = tk.Entry(top, font=font, show=show)
+        entry.pack(side=tk.LEFT)
+
+        # Definer en StringVar, basically en str men som endres ved funksjon. Slik kan vi
+        # i on_input definere text for å returne den senere
+        text = tk.StringVar()
+
+        def on_input(_):
+            """ Når dialogen er over, skal vi sende teksten og slette hele greia. """
+            text.set(entry.get())
+            top.destroy()
+        entry.bind("<Return>", on_input)
+
+        # Sett vinduet i midta av skjermen
+        top.update()
+        w, h = top.winfo_width(), top.winfo_height()
+        ws, hs = top.winfo_screenwidth(), top.winfo_screenheight()
+        top.geometry("{}x{}+{}+{}".format(w, h, int((ws / 2) - (w / 2)), int((hs / 2) - (h / 2))))
+
+        # Fokuser på tekst boksen og vent til vinduet blir ødelagt
+        entry.focus_set()
+        root.wait_window(top)
+        return text.get()
+
+    # Passord er bare en dialog hvor vi erstatter tekst med sirkler
+    getpass = partial(input, show="•")
+
+    # Fokuser på text input boksen slik at brukeren slipper å klikke når han starter programmet
+    text_input.focus_set()
+
+    def check_running():
+        """ Skjekk om programmet fortsatt kjører hvert 5. sekund. """
+        if not running:
+            root.destroy()
+        else:
+            root.after(500, check_running)
+
+    root.after(500, check_running)
+    root.mainloop()
+
+
+def main():
+    parser = ArgumentParser(description="skullWFTP kan gjore litt av hvert, den.")
+    parser.add_argument("--gui", "-g", action="store_true", help="Vis en GUI framfor å skrive i shell.")
+    args = parser.parse_args()
+
+    if args.gui:
+        run_gui()
+    else:
+        run_cmd()
+
+
 # Dette betyr bare at vi skal kjøre de gangene programmet faktisk starter
 if __name__ == "__main__":
     try:
         main()
     except (EOFError, ConnectionAbortedError):
         pass
-
-
