@@ -321,6 +321,7 @@ def cd(path=""):
 def ls(path=None):
     """ Se filene i gjeldene eller spesifisert mappe. """
     ftp.dir(path, light_print)
+    light_print()
 
 
 @command(alias="move ren rename", require_login=True)
@@ -469,6 +470,7 @@ def run_gui():
         """ Vi parser kommandoer når brukeren trykker Enter. """
         text = text_input.get()
         if text:
+            light_print("> " + text)
             parse_command(text)
         text_input.delete(0, tk.END)
         prompt.set(format_prompt())
@@ -530,9 +532,11 @@ def run_gui():
         if not running:
             root.destroy()
         else:
-            root.after(500, check_running)
+            root.after(250, check_running)
 
-    root.after(500, check_running)
+    root.after(250, check_running)
+    root.resizable(0, 0)
+    root.protocol("WM_DELETE_WINDOW", cmd_exit)
     root.mainloop()
 
 
