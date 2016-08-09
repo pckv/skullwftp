@@ -2,10 +2,10 @@
 """
 
 import ftplib
-import shlex
 import inspect
 import os
 import re
+import shlex
 from argparse import ArgumentParser
 from collections import namedtuple
 from functools import wraps, partial
@@ -442,9 +442,11 @@ def run_gui():
         return
 
     print("Starter i GUI modus.")
+    title = "skullwftp"
 
     # Initialiser Tkinter
     root = tk.Tk()
+    root.wm_title(title)
     font = ("Courier New", 12)
 
     # Ordne output boksen
@@ -491,6 +493,7 @@ def run_gui():
         """ Overskriv input funksjonen til å åpne en egendefinert dialog. """
         # Initialiser det nye vinduet
         top = tk.Toplevel(root)
+        top.wm_title(title)
         top.resizable(0, 0)
 
         # Lag en label på toppen som viser prompt
