@@ -11,7 +11,7 @@ from collections import namedtuple
 from functools import wraps, partial
 from getpass import getpass
 
-# Vi forsøker å importere readline, som sikkert nok ikke funker til Windows :(
+# Vi forsøker å importere readline, som skal hjelpe linux brukere med message history
 # Denne overskriver input() funksjonen slik at den støtter message history og liknende
 try:
     import readline
@@ -22,10 +22,8 @@ _print = print
 _input = input
 light_print = partial(print, end="\n")
 
-# Lag download mappe
 download_path = "downloads/"
-if not os.path.exists(download_path):
-    os.mkdir(download_path)
+path_split = re.compile(r"/|\\")
 
 commands = []
 Command = namedtuple("Command", "name function usage description alias require_login rest")
@@ -360,9 +358,17 @@ def rmdir(target):
     ftp.rmd(target)
 
 
-@command(alias="retr get download getfile")
-def retrieve(path, name):
+@command(alias="retr get download getfile dl")
+def retrieve(path, name=None):
     """ Last ned en fil fra FTP-serveren. """
+    # Lag download mappa om den ikke eksisterer
+    if not os.path.exists(download_path):
+        os.mkdir(download_path)
+
+    # Navnet på fila overført er lik navnet på fila vi mottar dersom navn ikke er oppgitt
+    if not name:
+        name = path_split.split(path)[-1]
+
     file_path = os.path.join(download_path, name)
 
     # Dersom fila eksisterer spør vi brukeren om han vil overskrive den
@@ -383,12 +389,18 @@ def retrieve(path, name):
 
 
 @command(alias="stor send sendfile")
-def transfer(path, name):
+def transfer(path, name=None):
     """ Send en fil til FTP-serveren. """
     # Skjekk om fila som skal bli sendt eksisterer
     if not os.path.exists(path):
         print("Finner ikke spesifisert fil.")
         return
+
+    # Navnet på fila overført er lik navnet på fila vi sender dersom navn ikke er oppgitt
+    if not name:
+        name = path_split.split(path)[-1]
+
+    print(name)
 
     with open(path, "rb") as f:
         ftp.storbinary("STOR {}".format(name), f)
@@ -398,7 +410,7 @@ def transfer(path, name):
 
 @command(alias="prompt", usage="prompt")
 def setprompt(user_prompt):
-    """ Sett en ny _prompt. """
+    """ Sett en ny prompt. """
     global _prompt
     _prompt = user_prompt
     print("Oppdaterte prompt.")
@@ -431,6 +443,28 @@ def run_cmd():
                 parse_command(cmd)
 
 
+class History:
+    def __init__(self):
+        self.history = []
+        self.cursor = 0
+
+    def append(self, text: str):
+        """ Legg til tekst i loggen og nullstill pekeren. """
+        self.history.append(text)
+        self.cursor = 0
+
+    @property
+    def value(self):
+        """ Når verdien er 0 skal vi returnere blank, ettersom 0 betyr
+        nåværende linje. Verdier lavere vil være lengre bak i loggen. """
+        return self.history[self.cursor] if self.cursor < 0 else ""
+
+    def move_cursor(self, amount: int):
+        """ Beveg pekeren rundt i loggen. """
+        if -len(self.history) <= self.cursor + amount <= 0:
+            self.cursor += amount
+
+
 def run_gui():
     """ Kjør med GUI. """
     global print, input, getpass, light_print
@@ -443,6 +477,7 @@ def run_gui():
 
     print("Starter i GUI modus.")
     title = "skullwftp"
+    history = History()
 
     # Initialiser Tkinter
     root = tk.Tk()
@@ -471,12 +506,31 @@ def run_gui():
     def on_enter(_):
         """ Vi parser kommandoer når brukeren trykker Enter. """
         text = text_input.get()
+
+        # Formater en output med kommandoen brukeren skrev og kjør kommandoen dersom de skrev noe som helst
         if text:
             light_print("> " + text)
             parse_command(text)
+
+        # Fjern tekst og formater prompt teksten
         text_input.delete(0, tk.END)
         prompt.set(format_prompt())
+
+        # Legg til teksten i historie loggen
+        history.append(text)
+    # Sett opp slik at Enter knappen kjører funksjonen
     text_input.bind("<Return>", on_enter)
+
+    def move_history(_, num):
+        """ Beveg i loggen og sett teksten lik verdien. """
+        history.move_cursor(num)
+
+        # Sett input lik verdien i historien
+        text_input.delete(0, tk.END)
+        text_input.insert(0, history.value)
+    # Sett opp Opp og Ned knappene slik at de beveger gjennom loggen
+    text_input.bind("<Up>", partial(move_history, num=-1))  # -1 altså går den bakover i loggen
+    text_input.bind("<Down>", partial(move_history, num=1))  # +1 går framover i loggen
 
     # Til slutt har vi en ekstra send knapp som funker på samme måte som når man trykker Enter i input boksen
     send_button = tk.Button(bottom, text="Send", font=font, takefocus=tk.NO)
