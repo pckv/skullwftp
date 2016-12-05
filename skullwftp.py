@@ -29,6 +29,7 @@ commands = []
 Command = namedtuple("Command", "name function usage description alias require_login rest")
 
 running = True  # Når denne er False vil programmet slutte å kjøre
+startup_message = "Velkommen til skullwftp! Skriv help for å komme i gang."
 
 
 def command(name: str=None, alias: str=None, usage: str=None, description: str=None,
@@ -426,7 +427,7 @@ def run_cmd():
     """ Kjør i cmd. """
     global logged_in
 
-    print("Velkommen.\n")
+    print(startup_message + "\n")
 
     while running:
         try:
@@ -488,7 +489,7 @@ def run_gui():
     text_output = tk.Text(root, font=font, wrap=tk.WORD, takefocus=tk.NO)
     text_output.pack(side=tk.TOP, fill=tk.X)
     text_output.bind("<Key>", lambda e: "break")  # Vi gjør dette for å disable keyboard input
-    text_output.insert(tk.END, "Velkommen.\n\n")
+    text_output.insert(tk.END, startup_message + "\n\n")
 
     # Vi lager en ramme for å holde alt av input
     bottom = tk.Frame(root)
